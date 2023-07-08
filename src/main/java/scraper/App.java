@@ -197,8 +197,15 @@ public class App {
         Set<String> profileLinks = new HashSet<>();
         boolean isNextPageAvailable = true;
         int pageToGoNext = 1;
+        int profilesRetrieved = 0;
 
-        while (isNextPageAvailable) {
+        if(totalProfilesToRetrieve != -1) {
+            System.out.println("Retriving profiles in total: " + totalProfilesToRetrieve);
+        } else {
+            System.out.println("Retriving profils as many as possible");
+        }
+
+        while (isNextPageAvailable && profilesRetrieved < totalProfilesToRetrieve || isNextPageAvailable && totalProfilesToRetrieve == -1) {
 
             // going to search results
             webDriver.get(String.format("https://www.linkedin.com/search/results/people/?page=%d", pageToGoNext));
@@ -206,11 +213,25 @@ public class App {
 
             List<WebElement> profilesElements = webDriver .findElements(By.xpath("//a[contains(@class, 'app-aware-link') and contains(@href, '/in/')]"));
 
-            profilesElements.forEach((profile) -> {
+            for(WebElement profile: profilesElements) {
+
                 String profileLink = profile.getAttribute("href");
-                profileLink = profileLink.substring(0, profileLink.indexOf("?miniProfile"));
+                int endIndex = profileLink.indexOf("?miniProfile");
+
+                if (endIndex != -1) {
+                    profileLink = profileLink.substring(0, endIndex);
+                    profileLinks.add(profileLink);
+                    profilesRetrieved++;
+                }
+
+                profilesRetrieved++;
+
+                if(profilesRetrieved >= totalProfilesToRetrieve && totalProfilesToRetrieve != -1) {
+                    break;
+                }
+
                 profileLinks.add(profileLink);
-            });
+            }
 
             pageToGoNext = pageToGoNext + 1;
             WebElement noResultPageElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@class='search-reusable-search-no-results artdeco-card mb2']")));
@@ -221,9 +242,6 @@ public class App {
 
             System.out.println(String.format("Total Profiles retrieved yet: %d", profileLinks.size()));
 
-            if (totalProfilesToRetrieve == profileLinks.size()) {
-                break;
-            }
         }
          return profileLinks;
     }
