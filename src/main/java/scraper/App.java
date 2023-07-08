@@ -52,8 +52,6 @@ public class App {
                 shouldHeadless = scanner.nextBoolean();
             }
         }
-
-        System.out.println("Your asnwer: " + shouldHeadless);
         try {
             startScraper(shouldHeadless, emailAddress, password);
         } catch (InterruptedException e) {
@@ -80,12 +78,16 @@ public class App {
         webDriver.findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[3]/button")).click();
         Thread.sleep(3000);
 
-    
-        // going to search results
-        webDriver.get("https://www.linkedin.com/search/results/people/");
-        Thread.sleep(3000);
-
         Set<String> profileLinks = new HashSet<>();
+        boolean isNextPageAvailable = true;
+        int pageToGoNext = 1;
+
+    
+       while (isNextPageAvailable) {
+
+         // going to search results
+        webDriver.get(String.format("https://www.linkedin.com/search/results/people/?page=%d", pageToGoNext));
+        Thread.sleep(3000);
 
         List<WebElement> profilesElements = webDriver.findElements(By.xpath("//a[contains(@class, 'app-aware-link') and contains(@href, '/in/')]"));
         profilesElements.forEach((profile) -> {
@@ -93,6 +95,15 @@ public class App {
             profileLink = profileLink.substring(0, profileLink.indexOf("?miniProfile"));
             profileLinks.add(profileLink);
         });
+
+        pageToGoNext = pageToGoNext + 1;
+        WebElement noResultPageElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@class='search-reusable-search-no-results artdeco-card mb2']")));
+
+        if(null != noResultPageElement) {
+            isNextPageAvailable = false;
+        }
+
+       }
 
         Set<Profile> profiles = new HashSet<>();
 
@@ -135,7 +146,7 @@ public class App {
         System.out.print(String.format("Scraper took %s minutes or %s seconds for scraping the data.", elapsedTimeInMinutes, elapsedTimeInSeconds));
     }
 
-    // using this method we'll not have to surround each web element in try-catch block because each web-element may or may not exist.
+    // using this method we'll not need to surround each web element in try-catch block because each web-element may or may not exist.
     private static <T> T runWithExceptionHandling(Supplier<T> supplier) {
         try {
             return supplier.get();
