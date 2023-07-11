@@ -21,3 +21,5 @@ When it'll finished scrapping it'll print out the following statement:
 `Scraper took n minutes or n seconds for scraping the data.`
 
 After finished, your scrapped data will be automatically saved in `profile_data.xlsx` file (automatically created).
+
+### 🚧 DISCLAIMER: This project violates LinkedIn's Terms and Conditions. Please use it only for educational purposes. 🚧
