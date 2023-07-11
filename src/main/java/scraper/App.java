@@ -243,10 +243,10 @@ public class App {
                 String profileAbout = "None";
                 boolean isOpenToWork = false;
 
-                profileExperience = runWithExceptionHandling(() -> webDriver.findElement(By.id("experience")).findElement(By.xpath("./parent::*")).getText());
-                profileEducation = runWithExceptionHandling(() -> webDriver.findElement(By.id("education")).findElement(By.xpath("./parent::*")).getText());
-                profileAbout = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@style='-webkit-line-clamp:4;']")).getText());
-
+                profileExperience = removeDuplicateWords(runWithExceptionHandling(() -> webDriver.findElement(By.id("experience")).getText()));
+                profileEducation = removeDuplicateWords(runWithExceptionHandling(() -> webDriver.findElement(By.id("education")).getText()));
+                profileAbout = removeDuplicateWords(runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@style='-webkit-line-clamp:4;']")).getText()));
+                
                 WebElement isOpenToWorkElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//main[@class='scaffold-layout__main']/section/section/div")));
 
                 if (null != isOpenToWorkElement) {
@@ -354,4 +354,23 @@ public class App {
 
         return true;
     }
+
+    
+    /**
+     * There is one more efficient way to do is to use HashSet to reduce time complexity.
+     * @param str takes an input
+     * @return new string with removed duplicate words.
+     * 
+     */
+    private static String removeDuplicateWords(String str) {
+        StringBuilder newStr = new StringBuilder();
+        String[] words = str.split(" ");
+        for(String word : words) {
+            if(newStr.indexOf(word) == -1) {
+                newStr.append(word).append(" ");
+            }
+        }
+        return newStr.toString().trim();
+    }
+
 }
