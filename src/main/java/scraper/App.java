@@ -7,6 +7,11 @@ import java.util.InputMismatchException;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -44,8 +49,7 @@ public class App {
         if (password.isBlank())
             System.exit(0);
 
-        System.out.print(
-                "\nReceived! now tell me should ChromeBrowser should show on the screen or not (true or false, Default: False): ");
+        System.out.print("\nReceived! now tell me should ChromeBrowser should show on the screen or not (true or false, Default: False): ");
         boolean shouldHeadless = true;
 
         try {
@@ -59,46 +63,92 @@ public class App {
         }
 
         System.out.println("\nHow many profiles you want to retrieve or enter -1 to retrieve as many as possible: ");
-        int totalProfilesToRetrieve = scanner.nextInt();
+        final int totalProfilesToRetrieve = scanner.nextInt();
 
+        // terminate the program if user didn't enter correct value.
+        if(totalProfilesToRetrieve < -1 || totalProfilesToRetrieve == 0) {
+            System.out.println("Enter -1 to retrieve profiles as many as possible or name the number to retrieve the profiles, Terminating the program...");
+            System.exit(0);
+        }
+
+        final boolean shouldHeadlessFinal = shouldHeadless;
+        final String emailAddressFinal = emailAddress;
+        final String passwordFinal = password;
+        
+
+        // Create a fixed-size thread pool with a specified number of threads
+        int numThreads = 10; // Adjust the number of threads as per your requirement
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+
+        // Start the scraping process asynchronously
+        CompletableFuture<Void> scraperFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                WebDriver webDriver = new ScraperConfiguration().setupWebDriver(shouldHeadlessFinal);
+                return startScraper(webDriver, shouldHeadlessFinal, emailAddressFinal, passwordFinal, totalProfilesToRetrieve);
+            } catch (Exception e) {
+                System.out.println("Exception occurred");
+                return null;
+            }
+        }, executor).thenCompose(Function.identity());
+
+        scraperFuture.join(); // Wait for the scraping process to complete
+
+        // Shut down the thread pool
+        executor.shutdown();
         try {
-            startScraper(shouldHeadless, emailAddress, password, totalProfilesToRetrieve);
+            executor.awaitTermination(1, TimeUnit.MINUTES);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
         scanner.close();
     }
-
-    private static void startScraper(boolean shouldHeadless, String emailAddress, String password, int totalProfilesToRetrieve) throws InterruptedException {
-
+    
+    /**
+     * Start the LinkedIn profile scraping process.
+     *
+     * @param webDriver              The Selenium WebDriver instance.
+     * @param shouldHeadless         A boolean indicating whether the Chrome browser should be displayed on the screen.
+     * @param emailAddress          The LinkedIn email address.
+     * @param password               The LinkedIn password.
+     * @param totalProfilesToRetrieve The number of profiles to retrieve. Use -1 to retrieve as many as possible.
+     * @return A CompletableFuture representing the asynchronous execution of the scraping process.
+     * @throws InterruptedException If the execution is interrupted.
+     */
+    private static CompletableFuture<Void> startScraper(WebDriver webDriver, boolean shouldHeadless, String emailAddress, String password,int totalProfilesToRetrieve) throws InterruptedException  {
+        
         // recording the starting time.
         long startTime = System.currentTimeMillis();
 
-        WebDriver webDriver = new ScraperConfiguration().setupWebDriver(shouldHeadless);
-
         boolean isLoginSuccess = loginToLinkedIn(webDriver, emailAddress, password);
 
-        if(!isLoginSuccess) {
+        if (!isLoginSuccess) {
             System.out.println("The credentials you provided were wrong, terminating the program...");
             System.exit(0);
         }
 
-        Set<String> profileLinks = retrieveProfileLinks(webDriver, totalProfilesToRetrieve);
-        Set<Profile> profiles = scrapProfiles(webDriver, profileLinks);
-        saveDataToExcelFile(profiles);
+        CompletableFuture<Set<String>> profileLinksFuture = retrieveProfileLinks(webDriver, totalProfilesToRetrieve);
+        CompletableFuture<Set<Profile>> profilesFuture = profileLinksFuture.thenCompose(profileLinks -> scrapProfiles(webDriver, profileLinks));
 
-        // recording the ending time
-        long endTime = System.currentTimeMillis();
-
-        // Elapsed time.
-        long elapsedTimeInSeconds = (endTime - startTime) / 1000;
-        long elapsedTimeInMinutes = (endTime - startTime) / 1000 / 60;
-        System.out.print(String.format("Scraper took %s minutes or %s seconds for scraping the data.", elapsedTimeInMinutes, elapsedTimeInSeconds));
+        return profilesFuture.thenAccept(profiles -> {
+            saveDataToExcelFile(profiles);
+        
+            // recording the ending time
+            long endTime = System.currentTimeMillis();
+        
+            // Elapsed time.
+            long elapsedTimeInSeconds = (endTime - startTime) / 1000;
+            long elapsedTimeInMinutes = (endTime - startTime) / 1000 / 60;
+            System.out.print(String.format("Scraper took %s minutes or %s seconds for scraping the data.",elapsedTimeInMinutes, elapsedTimeInSeconds));
+        }).thenRun(webDriver::quit);
     }
 
-    // using this method we'll not need to surround each web element in try-catch
-    // block because each web-element may or may not exist.
+    /**
+     * Run a supplier with exception handling, returning null if an exception occurs.
+     *
+     * @param supplier The supplier to execute.
+     * @param <T>      The type of value returned by the supplier.
+     * @return The value returned by the supplier, or null if an exception occurs.
+     */
     private static <T> T runWithExceptionHandling(Supplier<T> supplier) {
         try {
             return supplier.get();
@@ -107,6 +157,11 @@ public class App {
         }
     }
 
+     /**
+     * Save the scraped profile data to an Excel file.
+     *
+     * @param profiles The set of Profile objects to save.
+     */
     private static void saveDataToExcelFile(Set<Profile> profiles) {
         Workbook workbook = new HSSFWorkbook();
         Sheet sheet = workbook.createSheet("Profiles Data");
@@ -156,97 +211,131 @@ public class App {
         }
     }
 
-    private static Set<Profile> scrapProfiles(WebDriver webDriver, Set<String> profileLinks) throws InterruptedException {
-         Set<Profile> profiles = new HashSet<>();
-        int profilesProcessed = 0;
-        int totalProfiles = profileLinks.size();
+    /**
+     * Scrap the LinkedIn profiles using the provided WebDriver and profile links.
+     *
+     * @param webDriver    The Selenium WebDriver instance.
+     * @param profileLinks The set of profile links to scrape.
+     * @return A CompletableFuture containing the set of scraped Profile objects.
+     */
+    private static CompletableFuture<Set<Profile>> scrapProfiles(WebDriver webDriver, Set<String> profileLinks) {
+        return CompletableFuture.supplyAsync(() -> {
+            Set<Profile> profiles = new HashSet<>();
+            int profilesProcessed = 0;
+            int totalProfiles = profileLinks.size();
 
-        for (String profileLink : profileLinks) {
+            for (String profileLink : profileLinks) {
 
-            webDriver.get(profileLink);
-            Thread.sleep(1000);
-
-            profilesProcessed++;
-
-            String profileName = webDriver.findElement(By.xpath("//h1[@class='text-heading-xlarge inline t-24 v-align-middle break-words']")).getText();
-            String profileDescription = webDriver.findElement(By.xpath("//div[@class='text-body-medium break-words']")).getText();
-
-            String profileExperience = "None";
-            String profileEducation = "None";
-            String profileAbout = "None";
-            boolean isOpenToWork = false;
-
-            profileExperience = runWithExceptionHandling(() -> webDriver.findElement(By.id("experience")).findElement(By.xpath("./parent::*")).getText());
-            profileEducation = runWithExceptionHandling(() -> webDriver.findElement(By.id("education")).findElement(By.xpath("./parent::*")).getText());
-            profileAbout = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@style='-webkit-line-clamp:4;']")).getText());
-
-            WebElement isOpenToWorkElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//main[@class='scaffold-layout__main']/section/section/div")));
-
-            if (null != isOpenToWorkElement) {
-                isOpenToWork = true;
-            }
-
-            Profile profile = new Profile(profileName, profileAbout, profileDescription, profileExperience, profileEducation, profileLink, isOpenToWork);
-            profiles.add(profile);
-            System.out.println(String.format("Scraping profile %d of %d", profilesProcessed, totalProfiles));
-        }
-        return profiles;
-    }
-
-    private static Set<String> retrieveProfileLinks(WebDriver webDriver, int totalProfilesToRetrieve) throws InterruptedException {
-        Set<String> profileLinks = new HashSet<>();
-        boolean isNextPageAvailable = true;
-        int pageToGoNext = 1;
-        int profilesRetrieved = 0;
-
-        if(totalProfilesToRetrieve != -1) {
-            System.out.println("Retriving profiles in total: " + totalProfilesToRetrieve);
-        } else {
-            System.out.println("Retriving profils as many as possible");
-        }
-
-        while (isNextPageAvailable && profilesRetrieved < totalProfilesToRetrieve || isNextPageAvailable && totalProfilesToRetrieve == -1) {
-
-            // going to search results
-            webDriver.get(String.format("https://www.linkedin.com/search/results/people/?page=%d", pageToGoNext));
-            Thread.sleep(1000);
-
-            List<WebElement> profilesElements = webDriver .findElements(By.xpath("//a[contains(@class, 'app-aware-link') and contains(@href, '/in/')]"));
-
-            for(WebElement profile: profilesElements) {
-
-                String profileLink = profile.getAttribute("href");
-                int endIndex = profileLink.indexOf("?miniProfile");
-
-                if (endIndex != -1) {
-                    profileLink = profileLink.substring(0, endIndex);
-                    profileLinks.add(profileLink);
-                    profilesRetrieved++;
+                webDriver.get(profileLink);
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
 
-                profilesRetrieved++;
+                profilesProcessed++;
 
-                if(profilesRetrieved >= totalProfilesToRetrieve && totalProfilesToRetrieve != -1) {
-                    break;
+                String profileName = webDriver.findElement(By.xpath("//h1[@class='text-heading-xlarge inline t-24 v-align-middle break-words']")).getText();
+                String profileDescription = webDriver.findElement(By.xpath("//div[@class='text-body-medium break-words']")).getText();
+
+                String profileExperience = "None";
+                String profileEducation = "None";
+                String profileAbout = "None";
+                boolean isOpenToWork = false;
+
+                profileExperience = runWithExceptionHandling(() -> webDriver.findElement(By.id("experience")).findElement(By.xpath("./parent::*")).getText());
+                profileEducation = runWithExceptionHandling(() -> webDriver.findElement(By.id("education")).findElement(By.xpath("./parent::*")).getText());
+                profileAbout = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@style='-webkit-line-clamp:4;']")).getText());
+
+                WebElement isOpenToWorkElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//main[@class='scaffold-layout__main']/section/section/div")));
+
+                if (null != isOpenToWorkElement) {
+                    isOpenToWork = true;
                 }
 
-                profileLinks.add(profileLink);
+                Profile profile = new Profile(profileName, profileAbout, profileDescription, profileExperience,profileEducation, profileLink, isOpenToWork);
+                profiles.add(profile);
+                System.out.println(String.format("Scraping profile %d of %d", profilesProcessed, totalProfiles));
             }
-
-            pageToGoNext = pageToGoNext + 1;
-            WebElement noResultPageElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@class='search-reusable-search-no-results artdeco-card mb2']")));
-
-            if (null != noResultPageElement) {
-                isNextPageAvailable = false;
-            }
-
-            System.out.println(String.format("Total Profiles retrieved yet: %d", profileLinks.size()));
-
-        }
-         return profileLinks;
+            return profiles;
+        });
     }
 
-    private static boolean loginToLinkedIn(WebDriver webDriver, String emailAddress, String password) throws InterruptedException {
+    /**
+     * Retrieve the profile links from LinkedIn search results.
+     *
+     * @param webDriver               The Selenium WebDriver instance.
+     * @param totalProfilesToRetrieve The number of profiles to retrieve. Use -1 to retrieve as many as possible.
+     * @return A CompletableFuture containing the set of retrieved profile links.
+     */
+    private static CompletableFuture<Set<String>> retrieveProfileLinks(WebDriver webDriver, int totalProfilesToRetrieve) {
+        return CompletableFuture.supplyAsync(() -> {
+
+            Set<String> profileLinks = new HashSet<>();
+            boolean isNextPageAvailable = true;
+            int pageToGoNext = 1;
+            int profilesRetrieved = 0;
+
+            if (totalProfilesToRetrieve != -1) {
+                System.out.println("Retrieving profiles in total: " + totalProfilesToRetrieve);
+            } else {
+                System.out.println("Retrieving profiles as many as possible");
+            }
+
+            while ((isNextPageAvailable && profilesRetrieved < totalProfilesToRetrieve)|| (isNextPageAvailable && totalProfilesToRetrieve == -1)) {
+
+                // going to search results
+                webDriver.get(String.format("https://www.linkedin.com/search/results/people/?page=%d", pageToGoNext));
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    // Handle InterruptedException appropriately
+                    e.printStackTrace();
+                }
+
+                List<WebElement> profilesElements = webDriver.findElements(By.xpath("//a[contains(@class, 'app-aware-link') and contains(@href, '/in/')]"));
+
+                for (WebElement profile : profilesElements) {
+
+                    String profileLink = profile.getAttribute("href");
+                    int endIndex = profileLink.indexOf("?miniProfile");
+
+                    if (endIndex != -1) {
+                        String modifiedProfileLink = profileLink.substring(0, endIndex);
+                        if (profileLinks.add(modifiedProfileLink)) {
+                            profilesRetrieved++;
+                        }
+                    }
+                    if (profilesRetrieved >= totalProfilesToRetrieve && totalProfilesToRetrieve != -1) {
+                        break;
+                    }
+                }
+
+                pageToGoNext++;
+                WebElement noResultPageElement = runWithExceptionHandling(() -> webDriver.findElement(By.xpath("//div[@class='search-reusable-search-no-results artdeco-card mb2']")));
+
+                if (noResultPageElement != null) {
+                    isNextPageAvailable = false;
+                }
+
+                System.out.println(String.format("Total Profiles retrieved yet: %d", profilesRetrieved));
+            }
+
+            return profileLinks;
+        });
+    }
+
+    /**
+     * Log in to LinkedIn using the provided WebDriver, email address, and password.
+     *
+     * @param webDriver    The Selenium WebDriver instance.
+     * @param emailAddress The LinkedIn email address.
+     * @param password     The LinkedIn password.
+     * @return True if the login is successful, false otherwise.
+     * @throws InterruptedException If the execution is interrupted.
+     */
+    private static boolean loginToLinkedIn(WebDriver webDriver, String emailAddress, String password)
+            throws InterruptedException {
         // going to linkedIn login page.
         webDriver.get("https://www.linkedin.com/login");
         Thread.sleep(1000);
@@ -255,11 +344,11 @@ public class App {
         webDriver.findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[1]/input")).sendKeys(emailAddress);
         webDriver.findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[2]/input")).sendKeys(password);
         webDriver.findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[3]/button")).click();
-        Thread.sleep(1000);
 
-        WebElement wrongCredentialsElement = runWithExceptionHandling(() -> webDriver.findElement(By.id("error-for-password")));
+        WebElement wrongCredentialsElement = runWithExceptionHandling(
+                () -> webDriver.findElement(By.id("error-for-password")));
 
-        if(wrongCredentialsElement != null) {
+        if (wrongCredentialsElement != null) {
             return false;
         }
 
