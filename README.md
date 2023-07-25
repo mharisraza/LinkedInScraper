@@ -1,8 +1,7 @@
 # LinkedInScraper
 Scrapping profiles and their information using Java and Selenium Library.
 
-
-![Screenshot 2023-07-08 055726](https://github.com/mharisraza/LinkedInScraper/assets/111365348/89809c29-09f7-4d7b-94a6-f4703cd2be3e)
+![image](https://github.com/mharisraza/LinkedInScraper/assets/111365348/533a9ead-53be-44a6-a54c-b54607ba0d91)
 
 ## Tech Used:
 - Java
