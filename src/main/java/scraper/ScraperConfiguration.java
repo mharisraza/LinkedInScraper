@@ -8,14 +8,14 @@ import io.github.bonigarcia.wdm.WebDriverManager;
 
 public class ScraperConfiguration {
 
-    public WebDriver setupWebDriver(boolean shouldHeadless) {
+    public WebDriver setupWebDriver(boolean headlessMode) {
 
         WebDriverManager.chromedriver().setup();
         WebDriver webDriver = new ChromeDriver();
 
-        if(shouldHeadless) {
+        if(headlessMode) {
             ChromeOptions options = new ChromeOptions();
-            options.addArguments("--headless=chrome");
+            options.addArguments("--headless");
             webDriver = new ChromeDriver(options);
         }
 
