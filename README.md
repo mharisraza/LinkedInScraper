@@ -8,6 +8,11 @@ Scrapping profiles and their information using Java and Selenium Library.
 - Selenium Library
 - Apache POI (Excel)
 
+## Required:
+to run this app properly "Chrome" should be installed and set-up properly on the machine, otherwise it may not run as expected.
+<br>
+There's no configuration required.
+
 ## How to Use?
 This is an simple maven-app, clone the app using git or download it, run `App.java` and then it'll start the application.
 It'll ask credentials for Your LinkedIn Email address and Password in terminal. 
@@ -18,8 +23,6 @@ And it'll ask you to about Chrome whether you want to open chrome (with opened c
 
 ![image](https://github.com/mharisraza/LinkedInScraper/assets/111365348/1b213f75-61c2-4bb4-89cc-4cc157b2343c)
 
-
-There's no configuration required.
 
 When it'll finished scrapping it'll print out the following statement:
 `Scraper took n minutes or n seconds for scraping the data.`
