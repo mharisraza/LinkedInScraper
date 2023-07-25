@@ -45,6 +45,7 @@ public class Profile {
         getDescription();
         getExperience();
         getEducation();
+        isOpenToWork();
     }
 
     /**

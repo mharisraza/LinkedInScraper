@@ -129,7 +129,10 @@ public class App {
         driverHelper.getDriver().findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[1]/input")).sendKeys(emailAddress);
         driverHelper.getDriver().findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[2]/input")).sendKeys(password);
         driverHelper.getDriver().findElement(By.xpath("/html/body/div/main/div[2]/div[1]/form/div[3]/button")).click();
-        Thread.sleep(15000);
+        Thread.sleep(2500);
+
+        // if verification captcha required make it sleep for 15 seconds to verify manually.
+        if(driverHelper.getDriver().getCurrentUrl().contains("checkpoint")) Thread.sleep(15000);
 
         WebElement wrongCredentialsElement = driverHelper.findElementIfExist(By.id("error-for-password"));
         return wrongCredentialsElement == null;
