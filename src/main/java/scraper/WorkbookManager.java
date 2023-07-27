@@ -13,7 +13,7 @@ import java.util.Set;
 
 public class WorkbookManager {
 
-    private Workbook generateWorkbook() {
+    private Workbook generateWorkbookAndSaveData(Set<Profile> profiles) {
         Workbook workbook = new HSSFWorkbook();
         Sheet sheet = workbook.createSheet("Profiles Data");
 
@@ -26,6 +26,18 @@ public class WorkbookManager {
         headerRow.createCell(4).setCellValue("Profile Education");
         headerRow.createCell(5).setCellValue("Profile Open To Work");
         headerRow.createCell(6).setCellValue("Profile Link");
+
+        int rowIndex = 1;
+        profiles.forEach((profile) -> {
+            Row dataRow = sheet.createRow(rowIndex);
+            dataRow.createCell(0).setCellValue(profile.getName());
+            dataRow.createCell(1).setCellValue(profile.getAbout());
+            dataRow.createCell(2).setCellValue(profile.getDescription());
+            dataRow.createCell(3).setCellValue(profile.getExperience());
+            dataRow.createCell(4).setCellValue(profile.getEducation());
+            dataRow.createCell(5).setCellValue(profile.isOpenToWork() ? "Yes" : "No");
+            dataRow.createCell(6).setCellValue(profile.getLink());
+        });
 
         // Auto-size columns
         for (int i = 0; i < headerRow.getLastCellNum(); i++) {
@@ -53,23 +65,7 @@ public class WorkbookManager {
         return workbook;
     }
 
-    private void insertDataToWorkbook(Set<Profile> profiles, Workbook workbook) {
-        Sheet sheet = workbook.getSheet("Profiles Data");
-
-        int rowIndex = 1;
-        profiles.forEach((profile) -> {
-            Row dataRow = sheet.createRow(rowIndex);
-            dataRow.createCell(0).setCellValue(profile.getName());
-            dataRow.createCell(1).setCellValue(profile.getAbout());
-            dataRow.createCell(2).setCellValue(profile.getDescription());
-            dataRow.createCell(3).setCellValue(profile.getExperience());
-            dataRow.createCell(4).setCellValue(profile.getEducation());
-            dataRow.createCell(5).setCellValue(profile.isOpenToWork() ? "Yes" : "No");
-            dataRow.createCell(6).setCellValue(profile.getLink());
-        });
-    }
-
     public void saveProfilesToWorkBook(Set<Profile> profiles) {
-        insertDataToWorkbook(profiles, generateWorkbook());
+        generateWorkbookAndSaveData(profiles);
     }
 }
