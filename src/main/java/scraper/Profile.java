@@ -128,12 +128,13 @@ public class Profile {
      *
      * @return True if open to work, false otherwise.
      */
-    public Boolean isOpenToWork() {
-        if(isOpenToWork != null) return isOpenToWork;
-        WebElement isOpenToWork = driverHelper.findElementIfExist(By.xpath("//main[@class='scaffold-layout__main']/section/section/div"));
-        if(isOpenToWork != null) return true;
-        return false;
-    }
+        public Boolean isOpenToWork() {
+            if(isOpenToWork != null) return isOpenToWork;
+            WebElement isOpenToWork = driverHelper.findElementIfExist(By.xpath("//main[@class='scaffold-layout__main']/section/section/div"));
+    //        if(isOpenToWork != null) return true;
+    //        return false;
+            return isOpenToWork != null;
+        }
 
     /**
      * Gets the profile link.
