@@ -32,3 +32,4 @@ When it'll finished scrapping it'll print out the following statement:
 After finished, your scrapped data will be automatically saved in `profile_data.xlsx` file (automatically created).
 
 ### 🚧 DISCLAIMER: This project violates LinkedIn's Terms and Conditions. Please use it only for educational purposes. 🚧
+### Note: This project is not being maintained and there is alternate web-version available at: https://github.com/mharisraza/WebLinkedInScraper 🙏
